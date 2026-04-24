@@ -78,6 +78,13 @@ pub const Dag = struct {
                 const rev = self.dependents.getPtr(dep).?;
                 try rev.append(self.allocator, from);
             },
+            .key_eq => |kv| {
+                if (!self.depends_on.contains(kv.key)) return error.UnknownKey;
+                const fwd = self.depends_on.getPtr(from).?;
+                try fwd.append(self.allocator, kv.key);
+                const rev = self.dependents.getPtr(kv.key).?;
+                try rev.append(self.allocator, from);
+            },
             .not => |c| try self.collectEdges(from, c.*),
             .all => |conds| for (conds) |c| try self.collectEdges(from, c),
             .any => |conds| for (conds) |c| try self.collectEdges(from, c),

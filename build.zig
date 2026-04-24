@@ -1,4 +1,5 @@
 const std = @import("std");
+const builtin = @import("builtin");
 
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
@@ -20,9 +21,12 @@ pub fn build(b: *std.Build) void {
             },
             .link_libc = true,
         }),
-        .use_llvm = true,
-        .use_lld = true,
     });
+
+    if (builtin.target.os.tag != .macos) {
+        exe.use_lld = true;
+        exe.use_llvm = true;
+    }
 
     exe.root_module.addCSourceFile(.{
         .file = b.path("src/tui/shim.c"),

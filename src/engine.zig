@@ -23,6 +23,14 @@ fn evalCondition(
             }
             return false;
         },
+        .key_eq => |kv| blk: {
+            const val = ctx.state.get(kv.key) orelse break :blk false;
+            break :blk switch (val) {
+                .choice => |c| std.mem.eql(u8, c, kv.value),
+                .string => |s| std.mem.eql(u8, s, kv.value),
+                else => false,
+            };
+        },
     };
 }
 

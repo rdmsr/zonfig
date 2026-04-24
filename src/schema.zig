@@ -11,6 +11,11 @@ pub const Range = struct { min: i64, max: i64 };
 pub const Condition = union(enum) {
     /// Depends on another key being true
     key: []const u8,
+    /// Key equals another value (only for choice/string keys)
+    key_eq: struct {
+        key: []const u8,
+        value: []const u8,
+    },
     /// Negation of another condition
     not: *const Condition,
     /// All sub-conditions must be true (AND)
@@ -77,6 +82,9 @@ pub const ValidateCode = enum {
     BoolHasRange,
     NonIntHasRange,
     NonChoiceHasOptions,
+    DependsOnChoiceNoOptions,
+    DependsOnInvalidOption,
+    DependsOnNonChoiceEq,
 };
 
 pub const ValidateIssue = struct {
@@ -245,6 +253,7 @@ fn validateCondition(
     allocator: std.mem.Allocator,
     report: *ValidateReport,
     kinds: *const std.StringHashMap(EntryKind),
+    entries: []const Entry,
     owner_key: []const u8,
     cond: Condition,
 ) !void {
@@ -257,9 +266,31 @@ fn validateCondition(
                 try issue(allocator, report, .DependsOnNonBool, owner_key, dep, "depends_on must reference a bool key");
             }
         },
-        .not => |c| try validateCondition(allocator, report, kinds, owner_key, c.*),
-        .all => |conds| for (conds) |c| try validateCondition(allocator, report, kinds, owner_key, c),
-        .any => |conds| for (conds) |c| try validateCondition(allocator, report, kinds, owner_key, c),
+        .key_eq => |kv| {
+            const dep_kind = kinds.get(kv.key);
+            if (dep_kind == null) {
+                try issue(allocator, report, .DependsOnUnknownKey, owner_key, kv.key, "depends_on references unknown key");
+            } else switch (dep_kind.?) {
+                .choice => {
+                    const entry = findEntry(entries, kv.key) orelse return;
+                    const opts = entry.options orelse {
+                        try issue(allocator, report, .DependsOnChoiceNoOptions, owner_key, kv.key, "depends_on key_eq references choice with no options");
+                        return;
+                    };
+                    if (!containsOption(opts, kv.value)) {
+                        try issue(allocator, report, .DependsOnInvalidOption, owner_key, kv.value, "depends_on key_eq value is not a valid option");
+                    }
+                },
+                .string => {},
+                else => {
+                    try issue(allocator, report, .DependsOnNonChoiceEq, owner_key, kv.key, "depends_on key_eq must reference a choice or string key");
+                },
+            }
+        },
+
+        .not => |c| try validateCondition(allocator, report, kinds, entries, owner_key, c.*),
+        .all => |conds| for (conds) |c| try validateCondition(allocator, report, kinds, entries, owner_key, c),
+        .any => |conds| for (conds) |c| try validateCondition(allocator, report, kinds, entries, owner_key, c),
     }
 }
 
@@ -278,7 +309,7 @@ fn validateRefsAndValues(
         const key = e.key;
 
         if (e.depends_on) |cond| {
-            try validateCondition(allocator, report, kinds, key.?, cond);
+            try validateCondition(allocator, report, kinds, entries, key.?, cond);
         }
 
         switch (e.kind) {
@@ -303,7 +334,7 @@ fn validateRefsAndValues(
                 } else {
                     for (opts.?) |opt| {
                         if (opt.depends_on) |cond| {
-                            try validateCondition(allocator, report, kinds, key.?, cond);
+                            try validateCondition(allocator, report, kinds, entries, key.?, cond);
                         }
                     }
                 }
@@ -337,6 +368,22 @@ fn validateRefsAndValues(
             }
         }
     }
+}
+
+// FIXME: this sucks!
+fn findEntry(entries: []const Entry, key: []const u8) ?*const Entry {
+    for (entries) |*e| {
+        if (e.kind == .menu) {
+            if (e.entries) |sub| {
+                if (findEntry(sub, key)) |found| return found;
+            }
+            continue;
+        }
+        if (e.key) |k| {
+            if (std.mem.eql(u8, k, key)) return e;
+        }
+    }
+    return null;
 }
 
 fn containsString(haystack: [][]const u8, needle: []const u8) bool {

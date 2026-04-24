@@ -49,6 +49,7 @@ Entries support the following kinds: `bool`, `int`, `string`, `choice`, and `men
 
 ```zig
 .depends_on = .{ .key = "some_bool" }
+.depends_on = .{ .key_eq = .{.key = "some_choice", .value = "some_option"} }
 .depends_on = .{ .not = .{ .key = "some_bool" } }
 .depends_on = .{ .all = .{ .{ .key = "A" }, .{ .key = "B" } } }
 .depends_on = .{ .any = .{ .{ .key = "A" }, .{ .not = .{ .key = "B" } } } }
