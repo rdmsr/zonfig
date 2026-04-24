@@ -1,0 +1,14 @@
+.{
+    .name = .zonfig,
+    .version = "0.1.0",
+    .fingerprint = 0xf0537c2ff9fc4057,
+    .minimum_zig_version = "0.16.0",
+
+    .paths = .{
+        "build.zig",
+        "build.zig.zon",
+        "src",
+        "LICENSE",
+        "README.md",
+    },
+}

@@ -1,0 +1,25 @@
+.{
+    .title = "Example configuration",
+    .entries = .{
+        .{
+            .kind = .choice,
+            .key = "fruit",
+            .label = "Favorite fruit",
+            .help = "This is a choice",
+            .default = .{ .choice = "apple" },
+            .options = .{ .{ .value = "apple" }, .{ .value = "banana" }, .{ .value = "orange" } },
+        },
+        .{
+            .kind = .choice,
+            .key = "build_mode",
+            .label = "Build mode",
+            .default = .{ .choice = "Debug" },
+            .options = .{
+                .{ .value = "Debug" },
+                .{ .value = "ReleaseSafe" },
+                .{ .value = "ReleaseFast" },
+                .{ .value = "ReleaseSmall" },
+            },
+        },
+    },
+}
