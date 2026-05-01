@@ -24,7 +24,7 @@ fn serializeZon(self: *Engine, w: *std.Io.Writer) Error!void {
     // Note: we can't use zon serialize directly because values might be multiple types.
     try w.print(".{{", .{});
 
-    var it = self.state.values.iterator();
+    var it = self.state.iterator();
     var first = true;
 
     while (it.next()) |entry| {
@@ -80,7 +80,7 @@ fn deserializeZon(self: *Engine, source: [:0]const u8) Error!void {
         const val_main_tok = ast.nodes.items(.main_token)[val_node];
         const val_raw = ast.tokenSlice(val_main_tok);
 
-        const entry = self.entries_by_key.get(key) orelse continue;
+        const entry = self.schema.entries_by_key.get(key) orelse continue;
 
         const new_val: Schema.Value = switch (entry.kind) {
             .bool => blk: {
@@ -112,13 +112,13 @@ fn deserializeZon(self: *Engine, source: [:0]const u8) Error!void {
             .menu => continue,
         };
 
-        try self.state.set(key, new_val);
+        try self.state.put(key, new_val);
     }
 }
 
 /// Serialize the current state to JSON.
 fn seralizeJson(self: *Engine, w: *std.Io.Writer) std.Io.Writer.Error!void {
-    var it = self.state.values.iterator();
+    var it = self.state.iterator();
     var first = true;
 
     try w.print("{{", .{});
@@ -156,7 +156,7 @@ fn deserializeJson(self: *Engine, source: [:0]const u8) Error!void {
         const key = entry.key_ptr.*;
         const val = entry.value_ptr.*;
 
-        const schema_entry = self.entries_by_key.get(key) orelse continue;
+        const schema_entry = self.schema.entries_by_key.get(key) orelse continue;
 
         const kind = std.meta.activeTag(val);
 
@@ -170,19 +170,19 @@ fn deserializeJson(self: *Engine, source: [:0]const u8) Error!void {
                 else
                     return Error.InvalidFormat;
 
-                try self.state.set(key, new_val);
+                try self.state.put(key, new_val);
             },
 
             .integer => {
                 if (schema_entry.kind != .int) return Error.InvalidFormat;
                 const num = val.integer;
-                try self.state.set(key, .{ .int = @intCast(num) });
+                try self.state.put(key, .{ .int = @intCast(num) });
             },
 
             .bool => {
                 if (schema_entry.kind != .bool) return Error.InvalidFormat;
                 const b = val.bool;
-                try self.state.set(key, .{ .bool = b });
+                try self.state.put(key, .{ .bool = b });
             },
 
             else => {

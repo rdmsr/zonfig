@@ -2,6 +2,7 @@ const std = @import("std");
 
 title: ?[]const u8,
 entries: []Entry,
+entries_by_key: std.StringHashMap(*const Entry),
 
 const Self = @This();
 
@@ -117,27 +118,32 @@ pub fn parse(
     source: [:0]const u8,
     diagnostic: *std.zon.parse.Diagnostics,
 ) !Self {
-    return try std.zon.parse.fromSliceAlloc(
-        Self,
+    const parsed = try std.zon.parse.fromSliceAlloc(
+        struct { title: ?[]const u8, entries: []Entry },
         allocator,
         source,
         diagnostic,
         .{ .free_on_error = true },
     );
+    return .{
+        .title = parsed.title,
+        .entries = parsed.entries,
+        .entries_by_key = .init(allocator),
+    };
 }
 
-/// Validate schema and collect ALL issues into report.
+/// Validate schema and collect all issues into report.
 /// Returns error.ValidationFailed if any issue exists.
 pub fn validate(
-    self: *const Self,
+    self: *Self,
     allocator: std.mem.Allocator,
     report: *ValidateReport,
 ) ValidateError!void {
     var kinds = std.StringHashMap(EntryKind).init(allocator);
     defer kinds.deinit();
 
-    try collectAndValidateShape(allocator, &kinds, self.entries, report);
-    try validateRefsAndValues(allocator, &kinds, self.entries, report);
+    try collectAndValidateShape(allocator, &kinds, &self.entries_by_key, self.entries, report);
+    try validateRefsAndValues(allocator, &kinds, &self.entries_by_key, self.entries, report);
 
     if (report.hasErrors()) return error.ValidationFailed;
 }
@@ -209,10 +215,11 @@ fn issue(
 fn collectAndValidateShape(
     allocator: std.mem.Allocator,
     kinds: *std.StringHashMap(EntryKind),
+    entries_by_key: *std.StringHashMap(*const Entry),
     entries: []const Entry,
     report: *ValidateReport,
 ) ValidateError!void {
-    for (entries) |e| {
+    for (entries) |*e| {
         switch (e.kind) {
             .menu => {
                 if (e.key != null)
@@ -222,7 +229,7 @@ fn collectAndValidateShape(
                     try issue(allocator, report, .MenuHasValueFields, e.key, null, "menu entries cannot have default/options/range");
 
                 if (e.entries) |sub| {
-                    try collectAndValidateShape(allocator, kinds, sub, report);
+                    try collectAndValidateShape(allocator, kinds, entries_by_key, sub, report);
                 }
             },
             else => {
@@ -231,7 +238,6 @@ fn collectAndValidateShape(
                     continue;
                 };
 
-                // Ensure key is a valid identifier
                 if (!isValidIdentifier(key)) {
                     try issue(allocator, report, .InvalidKeyName, key, null, "key must be a valid identifier");
                 }
@@ -243,6 +249,7 @@ fn collectAndValidateShape(
                     try issue(allocator, report, .DuplicateKey, key, null, "duplicate key");
                 } else {
                     kinds.put(key, e.kind) catch return error.OutOfMemory;
+                    entries_by_key.put(key, e) catch return error.OutOfMemory;
                 }
             },
         }
@@ -253,7 +260,7 @@ fn validateCondition(
     allocator: std.mem.Allocator,
     report: *ValidateReport,
     kinds: *const std.StringHashMap(EntryKind),
-    entries: []const Entry,
+    entries_by_key: *const std.StringHashMap(*const Entry),
     owner_key: []const u8,
     cond: Condition,
 ) !void {
@@ -272,7 +279,7 @@ fn validateCondition(
                 try issue(allocator, report, .DependsOnUnknownKey, owner_key, kv.key, "depends_on references unknown key");
             } else switch (dep_kind.?) {
                 .choice => {
-                    const entry = findEntry(entries, kv.key) orelse return;
+                    const entry = entries_by_key.get(kv.key) orelse return;
                     const opts = entry.options orelse {
                         try issue(allocator, report, .DependsOnChoiceNoOptions, owner_key, kv.key, "depends_on key_eq references choice with no options");
                         return;
@@ -288,28 +295,29 @@ fn validateCondition(
             }
         },
 
-        .not => |c| try validateCondition(allocator, report, kinds, entries, owner_key, c.*),
-        .all => |conds| for (conds) |c| try validateCondition(allocator, report, kinds, entries, owner_key, c),
-        .any => |conds| for (conds) |c| try validateCondition(allocator, report, kinds, entries, owner_key, c),
+        .not => |c| try validateCondition(allocator, report, kinds, entries_by_key, owner_key, c.*),
+        .all => |conds| for (conds) |c| try validateCondition(allocator, report, kinds, entries_by_key, owner_key, c),
+        .any => |conds| for (conds) |c| try validateCondition(allocator, report, kinds, entries_by_key, owner_key, c),
     }
 }
 
 fn validateRefsAndValues(
     allocator: std.mem.Allocator,
     kinds: *const std.StringHashMap(EntryKind),
+    entries_by_key: *const std.StringHashMap(*const Entry),
     entries: []const Entry,
     report: *ValidateReport,
 ) ValidateError!void {
     for (entries) |e| {
         if (e.kind == .menu) {
-            if (e.entries) |sub| try validateRefsAndValues(allocator, kinds, sub, report);
+            if (e.entries) |sub| try validateRefsAndValues(allocator, kinds, entries_by_key, sub, report);
             continue;
         }
 
         const key = e.key;
 
         if (e.depends_on) |cond| {
-            try validateCondition(allocator, report, kinds, entries, key.?, cond);
+            try validateCondition(allocator, report, kinds, entries_by_key, key.?, cond);
         }
 
         switch (e.kind) {
@@ -334,7 +342,7 @@ fn validateRefsAndValues(
                 } else {
                     for (opts.?) |opt| {
                         if (opt.depends_on) |cond| {
-                            try validateCondition(allocator, report, kinds, entries, key.?, cond);
+                            try validateCondition(allocator, report, kinds, entries_by_key, key.?, cond);
                         }
                     }
                 }
@@ -368,22 +376,6 @@ fn validateRefsAndValues(
             }
         }
     }
-}
-
-// FIXME: this sucks!
-fn findEntry(entries: []const Entry, key: []const u8) ?*const Entry {
-    for (entries) |*e| {
-        if (e.kind == .menu) {
-            if (e.entries) |sub| {
-                if (findEntry(sub, key)) |found| return found;
-            }
-            continue;
-        }
-        if (e.key) |k| {
-            if (std.mem.eql(u8, k, key)) return e;
-        }
-    }
-    return null;
 }
 
 fn containsString(haystack: [][]const u8, needle: []const u8) bool {

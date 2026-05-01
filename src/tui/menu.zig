@@ -66,7 +66,7 @@ pub const MenuView = struct {
         try self.engine.collectActive(self.allocator, level, &self.entries);
 
         // Reset stale choice entries to their default if their dependencies changed.
-        var it = self.engine.entries_by_key.iterator();
+        var it = self.engine.schema.entries_by_key.iterator();
         while (it.next()) |kv| {
             const entry = kv.value_ptr.*;
             if (entry.kind != .choice) continue;

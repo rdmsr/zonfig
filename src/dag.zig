@@ -7,6 +7,11 @@ pub const Error = error{
     OutOfMemory,
 };
 
+const Node = struct {
+    dependents: std.ArrayListUnmanaged([]const u8) = .empty,
+    depends_on: std.ArrayListUnmanaged([]const u8) = .empty,
+};
+
 /// A directed acyclic graph (DAG) to represent dependencies between configuration entries.
 /// Each node is a configuration entry, and edges represent "depends_on" relationships.
 /// The DAG allows us to efficiently determine if an entry is active based on its dependencies,
@@ -14,29 +19,24 @@ pub const Error = error{
 pub const Dag = struct {
     const Color = enum { white, grey, black };
 
-    /// Map from a key to the list of keys that depend on it.
-    dependents: std.StringHashMap(std.ArrayListUnmanaged([]const u8)),
-
-    /// Map from a key to the keys it depends on (if any).
-    depends_on: std.StringHashMap(std.ArrayListUnmanaged([]const u8)),
+    nodes: std.StringHashMap(Node),
 
     allocator: std.mem.Allocator,
 
     pub fn init(allocator: std.mem.Allocator) Dag {
         return .{
-            .dependents = .init(allocator),
-            .depends_on = .init(allocator),
+            .nodes = .init(allocator),
             .allocator = allocator,
         };
     }
 
     pub fn deinit(self: *Dag) void {
-        var it = self.dependents.valueIterator();
-        while (it.next()) |list| list.deinit(self.allocator);
-        self.dependents.deinit();
-        var it2 = self.depends_on.valueIterator();
-        while (it2.next()) |list| list.deinit(self.allocator);
-        self.depends_on.deinit();
+        var it = self.nodes.valueIterator();
+        while (it.next()) |node| {
+            node.dependents.deinit(self.allocator);
+            node.depends_on.deinit(self.allocator);
+        }
+        self.nodes.deinit();
     }
 
     pub fn build(self: *Dag, entries: []const schema.Entry) Error!void {
@@ -52,8 +52,7 @@ pub const Dag = struct {
                 continue;
             }
             const key = entry.key orelse continue;
-            try self.depends_on.put(key, .empty);
-            try self.dependents.put(key, .empty);
+            try self.nodes.put(key, .{});
         }
     }
 
@@ -72,18 +71,14 @@ pub const Dag = struct {
     fn collectEdges(self: *Dag, from: []const u8, cond: schema.Condition) Error!void {
         switch (cond) {
             .key => |dep| {
-                if (!self.depends_on.contains(dep)) return error.UnknownKey;
-                const fwd = self.depends_on.getPtr(from).?;
-                try fwd.append(self.allocator, dep);
-                const rev = self.dependents.getPtr(dep).?;
-                try rev.append(self.allocator, from);
+                if (!self.nodes.contains(dep)) return error.UnknownKey;
+                try self.nodes.getPtr(from).?.depends_on.append(self.allocator, dep);
+                try self.nodes.getPtr(dep).?.dependents.append(self.allocator, from);
             },
             .key_eq => |kv| {
-                if (!self.depends_on.contains(kv.key)) return error.UnknownKey;
-                const fwd = self.depends_on.getPtr(from).?;
-                try fwd.append(self.allocator, kv.key);
-                const rev = self.dependents.getPtr(kv.key).?;
-                try rev.append(self.allocator, from);
+                if (!self.nodes.contains(kv.key)) return error.UnknownKey;
+                try self.nodes.getPtr(from).?.depends_on.append(self.allocator, kv.key);
+                try self.nodes.getPtr(kv.key).?.dependents.append(self.allocator, from);
             },
             .not => |c| try self.collectEdges(from, c.*),
             .all => |conds| for (conds) |c| try self.collectEdges(from, c),
@@ -95,10 +90,10 @@ pub const Dag = struct {
         var colors = std.StringHashMap(Color).init(self.allocator);
         defer colors.deinit();
 
-        var kit = self.depends_on.keyIterator();
+        var kit = self.nodes.keyIterator();
         while (kit.next()) |k| try colors.put(k.*, .white);
 
-        var it = self.depends_on.keyIterator();
+        var it = self.nodes.keyIterator();
         while (it.next()) |k| {
             if (colors.get(k.*).? == .white)
                 try self.dfs(k.*, &colors);
@@ -107,8 +102,9 @@ pub const Dag = struct {
 
     fn dfs(self: *Dag, key: []const u8, colors: *std.StringHashMap(Color)) Error!void {
         colors.put(key, .grey) catch return error.OutOfMemory;
-        const deps = self.depends_on.get(key) orelse return;
-        for (deps.items) |dep| {
+        const node = self.nodes.get(key) orelse return;
+
+        for (node.depends_on.items) |dep| {
             switch (colors.get(dep) orelse .white) {
                 .grey => return error.CyclicDependency,
                 .white => try self.dfs(dep, colors),

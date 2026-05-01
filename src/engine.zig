@@ -34,60 +34,11 @@ fn evalCondition(
     };
 }
 
-/// Represents the current state of the configuration.
-const State = struct {
-    values: std.StringHashMap(Schema.Value),
-    allocator: std.mem.Allocator,
-
-    pub fn init(allocator: std.mem.Allocator) State {
-        return .{
-            .values = std.StringHashMap(Schema.Value).init(allocator),
-            .allocator = allocator,
-        };
-    }
-
-    /// Recursively set all keys to their default values.
-    pub fn buildDefault(self: *State, entries: []const Schema.Entry) !void {
-        for (entries) |entry| {
-            if (entry.kind == .menu) {
-                if (entry.entries) |sub| try self.buildDefault(sub);
-                continue;
-            }
-            const key = entry.key orelse continue;
-            try self.set(key, entry.getDefault());
-        }
-    }
-
-    pub fn deinit(self: *State) void {
-        self.values.deinit();
-    }
-
-    /// Set the value of a key.
-    pub fn set(self: *State, key: []const u8, value: Schema.Value) !void {
-        try self.values.put(key, value);
-    }
-
-    /// Get the value of a key, or null if not set.
-    pub fn get(self: *const State, key: []const u8) ?Schema.Value {
-        return self.values.get(key);
-    }
-
-    /// Check if a key is true (i.e. all its dependencies are true).
-    pub fn isTrue(self: *const State, key: []const u8) bool {
-        const val = self.get(key) orelse return false;
-        return switch (val) {
-            .bool => |b| b,
-            else => true,
-        };
-    }
-};
-
 pub const Engine = struct {
     allocator: std.mem.Allocator,
     schema: Schema,
     dag: dag.Dag,
-    state: State,
-    entries_by_key: std.StringHashMap(*const Schema.Entry),
+    state: std.StringHashMap(Schema.Value),
     dirty: bool,
     save_file: ?*std.Io.File,
     save_io: ?std.Io,
@@ -114,7 +65,6 @@ pub const Engine = struct {
             .schema = sch,
             .dag = .init(allocator),
             .state = .init(allocator),
-            .entries_by_key = .init(allocator),
             .dirty = true,
             .format = options.format,
             .save_file = null,
@@ -122,9 +72,8 @@ pub const Engine = struct {
         };
         errdefer e.deinit();
 
-        try e.buildEntryIndex(e.schema.entries);
         try e.dag.build(e.schema.entries);
-        try e.state.buildDefault(e.schema.entries);
+        try e.buildDefaults(e.schema.entries);
 
         return e;
     }
@@ -132,7 +81,7 @@ pub const Engine = struct {
     pub fn deinit(self: *Self) void {
         self.dag.deinit();
         self.state.deinit();
-        self.entries_by_key.deinit();
+        self.schema.deinit(self.allocator);
     }
 
     /// Check if a key is active by recursively evaluating its condition,
@@ -143,14 +92,14 @@ pub const Engine = struct {
         return evalCondition(cond, isActiveTrampoline, self);
     }
 
-    /// Trampoline so evalCondition can call back into isActive recursively,
-    /// giving us full transitive dependency evaluation for free.
+    /// Trampoline so evalCondition can call back into isActive recursively.
     fn isActiveTrampoline(self: *const Self, key: []const u8) bool {
-        if (!self.isActive(key)) {
-            return false;
-        }
-
-        return self.state.isTrue(key);
+        if (!self.isActive(key)) return false;
+        const val = self.state.get(key) orelse return false;
+        return switch (val) {
+            .bool => |b| b,
+            else => true,
+        };
     }
 
     pub fn isOptionActive(self: *const Self, opt: *const Schema.Option) bool {
@@ -186,7 +135,7 @@ pub const Engine = struct {
             else => {},
         }
 
-        try self.state.set(key, value);
+        try self.state.put(key, value);
 
         self.dirty = true;
     }
@@ -203,7 +152,7 @@ pub const Engine = struct {
 
     /// Get the schema entry for a key, or null if not found.
     pub fn getEntry(self: *const Self, key: []const u8) ?*const Schema.Entry {
-        return self.entries_by_key.get(key);
+        return self.schema.entries_by_key.get(key);
     }
 
     /// Collect all entries that are active in the given menu.
@@ -267,7 +216,7 @@ pub const Engine = struct {
         var buf: std.ArrayList(u8) = .empty;
         defer buf.deinit(self.allocator);
 
-        var it = self.state.values.iterator();
+        var it = self.state.iterator();
         while (it.next()) |kv| {
             const key = kv.key_ptr.*;
             const val = kv.value_ptr.*;
@@ -306,14 +255,14 @@ pub const Engine = struct {
         return buf.toOwnedSlice(self.allocator);
     }
 
-    fn buildEntryIndex(self: *Engine, entries: []const Schema.Entry) !void {
-        for (entries) |*entry| {
+    fn buildDefaults(self: *Engine, entries: []const Schema.Entry) !void {
+        for (entries) |entry| {
             if (entry.kind == .menu) {
-                if (entry.entries) |sub| try self.buildEntryIndex(sub);
+                if (entry.entries) |sub| try self.buildDefaults(sub);
                 continue;
             }
             const key = entry.key orelse continue;
-            try self.entries_by_key.put(key, entry);
+            try self.state.put(key, entry.getDefault());
         }
     }
 
