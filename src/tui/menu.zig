@@ -229,6 +229,7 @@ pub const MenuView = struct {
             .menu => {
                 try self.stack.append(self.allocator, entry);
             },
+            .import => return error.InvalidEntryKind,
             .bool => {
                 const key = entry.key orelse return;
                 const val = self.engine.get(key) orelse return;
@@ -381,6 +382,7 @@ pub const MenuView = struct {
             .int => std.fmt.allocPrintSentinel(self.allocator, "({d}) {s}", .{ (self.engine.get(entry.key.?).?).int, entry.label }, 0),
             .choice => std.fmt.allocPrintSentinel(self.allocator, "({s}) {s}", .{ (self.engine.get(entry.key.?).?).choice, entry.label }, 0),
             .string => std.fmt.allocPrintSentinel(self.allocator, "({s}) {s}", .{ (self.engine.get(entry.key.?).?).string, entry.label }, 0),
+            .import => return error.InvalidEntryKind,
         };
     }
 

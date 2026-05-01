@@ -1,0 +1,16 @@
+.{
+    .{
+        .kind = .menu,
+        .label = "Submenu",
+        .entries = .{
+            .{
+                .kind = .choice,
+                .key = "color",
+                .label = "Favorite color",
+                .help = "This is another choice",
+                .default = .{ .choice = "red" },
+                .options = .{ .{ .value = "red" }, .{ .value = "green" }, .{ .value = "blue" } },
+            },
+        },
+    },
+}

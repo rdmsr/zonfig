@@ -118,7 +118,7 @@ pub fn main(init: std.process.Init) !void {
     var report: zonfig.Schema.ValidateReport = .{};
     defer report.deinit(allocator);
 
-    const schema = zonfig.Schema.parseAndValidate(allocator, source, &diag, &report) catch |err| {
+    const schema = zonfig.Schema.parseAndValidate(allocator, init.io, source, &diag, &report) catch |err| {
         switch (err) {
             error.ValidationFailed => try printValidationReport(errw, report),
             else => {

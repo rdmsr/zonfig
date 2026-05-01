@@ -6,7 +6,7 @@ entries_by_key: std.StringHashMap(*const Entry),
 
 const Self = @This();
 
-pub const EntryKind = enum { bool, int, string, choice, menu };
+pub const EntryKind = enum { bool, int, string, choice, menu, import };
 pub const Range = struct { min: i64, max: i64 };
 
 pub const Condition = union(enum) {
@@ -37,6 +37,7 @@ pub const Value = union(EntryKind) {
     string: []const u8,
     choice: []const u8,
     menu: void,
+    import: void,
 };
 
 pub const Entry = struct {
@@ -49,6 +50,7 @@ pub const Entry = struct {
     options: ?[]const Option = null,
     range: ?Range = null,
     entries: ?[]Entry = null,
+    path: ?[]const u8 = null, // for import entries
 
     pub fn getDefault(self: *const Entry) Value {
         return self.default orelse switch (self.kind) {
@@ -57,6 +59,7 @@ pub const Entry = struct {
             .string => .{ .string = "" },
             .choice => .{ .choice = if (self.options) |o| o[0].value else "" },
             .menu => .{ .menu = {} },
+            .import => unreachable,
         };
     }
 };
@@ -148,17 +151,28 @@ pub fn validate(
     if (report.hasErrors()) return error.ValidationFailed;
 }
 
+pub fn resolve(
+    self: *Self,
+    allocator: std.mem.Allocator,
+    io: std.Io,
+    base_dir: std.Io.Dir,
+    diagnostic: *std.zon.parse.Diagnostics,
+) !void {
+    self.entries = try resolveEntries(allocator, io, self.entries, base_dir, diagnostic);
+}
+
 /// Convenience method to parse and validate.
 /// Caller owns returned schema and report memory.
 pub fn parseAndValidate(
     allocator: std.mem.Allocator,
+    io: std.Io,
     source: [:0]const u8,
     diagnostic: *std.zon.parse.Diagnostics,
     report: *ValidateReport,
 ) !Self {
     var parsed = try parse(allocator, source, diagnostic);
     errdefer parsed.deinit(allocator);
-
+    try parsed.resolve(allocator, io, std.Io.Dir.cwd(), diagnostic);
     try parsed.validate(allocator, report);
     return parsed;
 }
@@ -168,6 +182,39 @@ pub fn deinit(self: *Self, allocator: std.mem.Allocator) void {
     deinitEntries(allocator, self.entries);
     allocator.free(self.entries);
     self.* = undefined;
+}
+
+fn resolveEntries(
+    allocator: std.mem.Allocator,
+    io: std.Io,
+    entries: []Entry,
+    base_dir: std.Io.Dir,
+    diagnostic: *std.zon.parse.Diagnostics,
+) ![]Entry {
+    var out: std.ArrayListUnmanaged(Entry) = .empty;
+    errdefer out.deinit(allocator);
+
+    for (entries) |e| {
+        if (e.kind == .import) {
+            const path = e.path orelse return error.ImportMissingPath;
+            const source = try base_dir.readFileAllocOptions(io, path, allocator, .unlimited, .@"1", 0);
+            defer allocator.free(source);
+
+            // FIXME: handle diagnostics from imported files
+            var imported = try std.zon.parse.fromSliceAlloc([]Entry, allocator, source, null, .{});
+            imported = try resolveEntries(allocator, io, imported, base_dir, diagnostic);
+            try out.appendSlice(allocator, imported);
+            allocator.free(imported);
+        } else {
+            var entry = e;
+            if (e.entries) |sub| {
+                entry.entries = try resolveEntries(allocator, io, sub, base_dir, diagnostic);
+            }
+            try out.append(allocator, entry);
+        }
+    }
+
+    return try out.toOwnedSlice(allocator);
 }
 
 fn deinitEntries(allocator: std.mem.Allocator, entries: []Entry) void {
@@ -348,6 +395,7 @@ fn validateRefsAndValues(
                 }
             },
             .menu => unreachable,
+            .import => unreachable,
         }
 
         if (e.default) |d| {

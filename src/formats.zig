@@ -110,6 +110,7 @@ fn deserializeZon(self: *Engine, source: [:0]const u8) Error!void {
                 break :blk .{ .choice = val_raw };
             },
             .menu => continue,
+            .import => continue,
         };
 
         try self.state.put(key, new_val);

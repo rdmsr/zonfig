@@ -1,6 +1,7 @@
 .{
     .title = "Example configuration",
     .entries = .{
+        .{ .kind = .import, .path = "subconfig.zon" },
         .{
             .kind = .choice,
             .key = "fruit",
