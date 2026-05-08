@@ -20,7 +20,7 @@ pub const MenuView = struct {
 
     root_entry: *Schema.Entry = undefined,
 
-    status: [256]u8 = [_]u8{0} ** 256,
+    status: [256]u8 = @splat(0),
     status_len: usize = 0,
 
     panel_y: i32 = 0,
@@ -61,7 +61,7 @@ pub const MenuView = struct {
         self.teardown();
         self.entries.clearRetainingCapacity();
 
-        const cur = self.stack.getLast();
+        const cur = self.stack.getLast() orelse return;
         const level = cur.entries orelse &.{};
         try self.engine.collectActive(self.allocator, level, &self.entries);
 
@@ -335,7 +335,7 @@ pub const MenuView = struct {
     }
 
     fn drawPanelTitle(self: *MenuView, w: ?*nc.WINDOW) void {
-        const cur = self.stack.getLast();
+        const cur = self.stack.getLast() orelse return;
         const label = cur.label;
         _ = nc.wattron(w, nc.COLOR_PAIR(nc.PAIR_TITLE) | nc.A_BOLD);
         nc.mvwprint(w, 0, 5, " {s} ", .{label});
