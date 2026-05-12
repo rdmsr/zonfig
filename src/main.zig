@@ -168,5 +168,5 @@ pub fn main(init: std.process.Init) !void {
 
     defer engine.deinit();
 
-    try app.run(allocator, &engine);
+    try app.run(init, &engine);
 }

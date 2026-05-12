@@ -79,6 +79,10 @@ pub const Engine = struct {
     }
 
     pub fn deinit(self: *Self) void {
+        var it = self.state.valueIterator();
+        while (it.next()) |v| {
+            freeOwnedValue(self.allocator, v.*);
+        }
         self.dag.deinit();
         self.state.deinit();
         self.schema.deinit(self.allocator);
@@ -121,22 +125,17 @@ pub const Engine = struct {
                     if (v < r.min or v > r.max) return error.IntOutOfRange;
                 }
             },
-            .choice => {
-                const opts = entry.options orelse return error.ChoiceInvalidOption;
-                var found = false;
-                for (opts) |*opt| {
-                    if (std.mem.eql(u8, opt.value, value.choice) and self.isOptionActive(opt)) {
-                        found = true;
-                        break;
-                    }
-                }
-                if (!found) return error.ChoiceInvalidOption;
+            .choice => if (!self.isActiveChoiceValue(entry, value.choice)) {
+                return error.ChoiceInvalidOption;
             },
             else => {},
         }
 
-        try self.state.put(key, value);
+        if (self.state.get(key)) |old| {
+            freeOwnedValue(self.allocator, old);
+        }
 
+        try self.state.put(key, try cloneOwnedValue(self.allocator, value));
         self.dirty = true;
     }
 
@@ -163,17 +162,9 @@ pub const Engine = struct {
         out: *std.ArrayListUnmanaged(*const Schema.Entry),
     ) !void {
         for (entries) |*e| {
-            if (e.kind == .menu) {
-                // Only append a menu if it has any visible children.
-                const sub = e.entries orelse continue;
-                if (!self.hasAnyActive(sub)) continue;
+            if (self.isEntryVisible(e)) {
                 try out.append(allocator, e);
-                continue;
             }
-
-            const key = e.key orelse continue;
-            if (!self.isActive(key)) continue;
-            try out.append(allocator, e);
         }
     }
 
@@ -262,7 +253,7 @@ pub const Engine = struct {
                 continue;
             }
             const key = entry.key orelse continue;
-            try self.state.put(key, entry.getDefault());
+            try self.state.put(key, try cloneOwnedValue(self.allocator, entry.getDefault()));
         }
     }
 
@@ -279,11 +270,43 @@ pub const Engine = struct {
         }
         return false;
     }
+
+    fn isEntryVisible(self: *const Self, entry: *const Schema.Entry) bool {
+        if (entry.kind == .menu) {
+            // Menus are only shown if they contain something the user can actually act on.
+            const sub_entries = entry.entries orelse return false;
+            return self.hasAnyActive(sub_entries);
+        }
+
+        const key = entry.key orelse return false;
+        return self.isActive(key);
+    }
+
+    fn isActiveChoiceValue(self: *const Self, entry: *const Schema.Entry, value: []const u8) bool {
+        const opts = entry.options orelse return false;
+        for (opts) |*opt| {
+            if (self.isOptionActive(opt) and std.mem.eql(u8, opt.value, value)) {
+                return true;
+            }
+        }
+        return false;
+    }
 };
 
-fn containsString(haystack: [][]const u8, needle: []const u8) bool {
-    for (haystack) |s| {
-        if (std.mem.eql(u8, s, needle)) return true;
+fn freeOwnedValue(allocator: std.mem.Allocator, value: Schema.Value) void {
+    // String-like values are duplicated into engine-owned storage on write, so callers
+    // can pass borrowed slices without worrying about their lifetime.
+    switch (value) {
+        .string => |s| if (s.len > 0) allocator.free(s),
+        .choice => |s| if (s.len > 0) allocator.free(s),
+        else => {},
     }
-    return false;
+}
+
+fn cloneOwnedValue(allocator: std.mem.Allocator, value: Schema.Value) !Schema.Value {
+    return switch (value) {
+        .string => |s| .{ .string = if (s.len > 0) try allocator.dupe(u8, s) else "" },
+        .choice => |s| .{ .choice = if (s.len > 0) try allocator.dupe(u8, s) else "" },
+        else => value,
+    };
 }

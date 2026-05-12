@@ -1,6 +1,12 @@
 .{
     .name = .zonfig,
     .version = "0.1.0",
+    .dependencies = .{
+        .zigzag = .{
+            .url = "git+https://github.com/meszmate/zigzag?ref=HEAD#7b3bd53c5c1ec983464d88d93ccf106e313f385d",
+            .hash = "zigzag-0.1.2-YXwYS4DjEQBoKsQdNAVWchZGPojFHe6jHfAkSRkPTp4I",
+        },
+    },
     .fingerprint = 0xf0537c2ff9fc4057,
     .minimum_zig_version = "0.16.0",
 

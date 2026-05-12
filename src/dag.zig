@@ -23,6 +23,7 @@ pub const Dag = struct {
 
     allocator: std.mem.Allocator,
 
+    /// Initialize the DAG for construction.
     pub fn init(allocator: std.mem.Allocator) Dag {
         return .{
             .nodes = .init(allocator),
@@ -30,6 +31,7 @@ pub const Dag = struct {
         };
     }
 
+    /// Deinitialize the DAG and free all resources.
     pub fn deinit(self: *Dag) void {
         var it = self.nodes.valueIterator();
         while (it.next()) |node| {
@@ -39,6 +41,11 @@ pub const Dag = struct {
         self.nodes.deinit();
     }
 
+    /// Build the DAG from the given schema entries. This involves:
+    /// 1. Registering all keys as nodes in the graph.
+    /// 2. Adding edges based on the "depends_on" conditions.
+    /// 3. Checking for cycles to ensure the graph is a DAG.
+    /// If any step fails, an appropriate error is returned.
     pub fn build(self: *Dag, entries: []const schema.Entry) Error!void {
         try self.registerKeys(entries);
         try self.registerEdges(entries);
@@ -69,6 +76,7 @@ pub const Dag = struct {
     }
 
     fn collectEdges(self: *Dag, from: []const u8, cond: schema.Condition) Error!void {
+        // Recursively collect edges from the "depends_on" conditions.
         switch (cond) {
             .key => |dep| {
                 if (!self.nodes.contains(dep)) return error.UnknownKey;
@@ -101,6 +109,8 @@ pub const Dag = struct {
     }
 
     fn dfs(self: *Dag, key: []const u8, colors: *std.StringHashMap(Color)) Error!void {
+        // Mark the current node as being visited (grey). If we encounter a grey node, it means we have a cycle.
+        // This is recursive but shouldn't cause stack overflow for reasonable graph sizes (I hope).
         colors.put(key, .grey) catch return error.OutOfMemory;
         const node = self.nodes.get(key) orelse return;
 

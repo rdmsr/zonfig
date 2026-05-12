@@ -426,13 +426,6 @@ fn validateRefsAndValues(
     }
 }
 
-fn containsString(haystack: [][]const u8, needle: []const u8) bool {
-    for (haystack) |s| {
-        if (std.mem.eql(u8, s, needle)) return true;
-    }
-    return false;
-}
-
 fn containsOption(haystack: []const Option, needle: []const u8) bool {
     for (haystack) |opt| {
         if (std.mem.eql(u8, opt.value, needle)) return true;

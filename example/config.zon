@@ -22,5 +22,13 @@
                 .{ .value = "ReleaseSmall" },
             },
         },
+
+        .{
+            .kind = .string,
+            .key = "name",
+            .label = "Your name",
+            .help = "This is a string",
+            .default = .{ .string = "John" },
+        },
     },
 }

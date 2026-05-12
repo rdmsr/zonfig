@@ -6,11 +6,11 @@ A kconfig-like configuration system for Zig projects, using ZON as the schema an
 
 ## Overview
 
-`zonfig` provides a TUI for editing build configuration based on `ncurses` and generates a Zig module your code can import directly.
-Configuration is defined in a ZON schema file, and the current values are stored in a separate ZON config file.
+`zonfig` provides a TUI for editing build configuration based on `zigzag` and generates a Zig module your code can import directly.
+Configuration is defined in a ZON schema file, and the current values are stored in a separate ZON (or JSON) config file.
 
 ### Features
-- Multiple config formats: ZON and JSON are both supported.
+- Multiple output config formats: ZON and JSON are both supported.
 - Support for boolean expressions in `depends_on` to control entry visibility.
 - Compile-time, type-safe access to config values in your code.
 
@@ -105,6 +105,5 @@ pub fn main() void {
 }
 ```
 
-The config file should be committed to version control. It is only regenerated when you run `zig build config`.
-
+The output config file should not be committed to version control.
 An example is provided in the `example/` directory.

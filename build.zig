@@ -10,6 +10,11 @@ pub fn build(b: *std.Build) void {
         .target = target,
     });
 
+    const zigzag = b.dependency("zigzag", .{
+        .target = target,
+        .optimize = optimize,
+    });
+
     const exe = b.addExecutable(.{
         .name = "zonfig",
         .root_module = b.createModule(.{
@@ -18,8 +23,8 @@ pub fn build(b: *std.Build) void {
             .optimize = optimize,
             .imports = &.{
                 .{ .name = "zonfig", .module = mod },
+                .{ .name = "zigzag", .module = zigzag.module("zigzag") },
             },
-            .link_libc = true,
         }),
     });
 
@@ -27,14 +32,6 @@ pub fn build(b: *std.Build) void {
         exe.use_lld = true;
         exe.use_llvm = true;
     }
-
-    exe.root_module.addCSourceFile(.{
-        .file = b.path("src/tui/shim.c"),
-        .flags = &.{"-std=c99"},
-    });
-
-    exe.root_module.linkSystemLibrary("ncurses", .{});
-    exe.root_module.linkSystemLibrary("menu", .{});
 
     b.installArtifact(exe);
 
