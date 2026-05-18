@@ -608,7 +608,7 @@ const Model = struct {
     fn rebuildVisibleEntries(self: *Model, saved_cursor: usize) !void {
         if (self.stack.items.len == 0) return;
 
-        const menu_entry = self.stack.getLast();
+        const menu_entry = self.stack.getLast() orelse return;
         self.entries.clearRetainingCapacity();
         try self.engine.collectActive(self.gpa, menu_entry.entries orelse &.{}, &self.entries);
 
@@ -792,7 +792,7 @@ const Model = struct {
 };
 
 pub fn run(init: std.process.Init, engine: *Engine) !void {
-    var program = try zz.Program(Model).init(init.gpa, init.io, init.environ_map);
+    var program = zz.Program(Model).init(init.gpa, init.io, init.environ_map);
     defer program.deinit();
     program.model.engine = engine;
     program.model.gpa = init.gpa;

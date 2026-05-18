@@ -9,6 +9,8 @@ A kconfig-like configuration system for Zig projects, using ZON as the schema an
 `zonfig` provides a TUI for editing build configuration based on `zigzag` and generates a Zig module your code can import directly.
 Configuration is defined in a ZON schema file, and the current values are stored in a separate ZON (or JSON) config file.
 
+Note: this project is compiled and developed against zig master.
+
 ### Features
 - Multiple output config formats: ZON and JSON are both supported.
 - Support for boolean expressions in `depends_on` to control entry visibility.
