@@ -608,7 +608,7 @@ const Model = struct {
     fn rebuildVisibleEntries(self: *Model, saved_cursor: usize) !void {
         if (self.stack.items.len == 0) return;
 
-        const menu_entry = self.stack.getLast() orelse return;
+        const menu_entry = self.stack.getLast();
         self.entries.clearRetainingCapacity();
         try self.engine.collectActive(self.gpa, menu_entry.entries orelse &.{}, &self.entries);
 
