@@ -3,12 +3,11 @@
     .version = "0.1.0",
     .dependencies = .{
         .zigzag = .{
-            .url = "git+https://github.com/meszmate/zigzag?ref=HEAD#1187d164073cbab1965476cbc9ebd31d3d2460aa",
-            .hash = "zigzag-0.1.2-YXwYS73qEQD51GHfONVN8Bas1RpyN2y5P2DLuLQUAhRZ",
+            .path = "vendor/zigzag",
         },
     },
     .fingerprint = 0xf0537c2ff9fc4057,
-    .minimum_zig_version = "0.16.0",
+    .minimum_zig_version = "0.17.0",
 
     .paths = .{
         "build.zig",
