@@ -49,7 +49,11 @@ fn serializeZon(self: *Engine, w: *std.Io.Writer) Error!void {
 /// Deserialize state from a ZON format.
 // TODO: do proper validation
 fn deserializeZon(self: *Engine, source: [:0]const u8) Error!void {
-    var ast = std.zig.Ast.parse(self.allocator, source, .zon) catch |err| {
+    var ast = std.zig.Ast.parse(
+        self.allocator,
+        source,
+        .{ .mode = .zon },
+    ) catch |err| {
         std.debug.print("error: failed to parse ZON: {any}\n", .{err});
         return Error.InvalidFormat;
     };

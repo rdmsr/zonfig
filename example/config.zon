@@ -14,12 +14,12 @@
             .kind = .choice,
             .key = "build_mode",
             .label = "Build mode",
-            .default = .{ .choice = "Debug" },
+            .default = .{ .choice = "debug" },
             .options = .{
-                .{ .value = "Debug" },
-                .{ .value = "ReleaseSafe" },
-                .{ .value = "ReleaseFast" },
-                .{ .value = "ReleaseSmall" },
+                .{ .value = "debug" },
+                .{ .value = "fast" },
+                .{ .value = "safe" },
+                .{ .value = "small" },
             },
         },
 

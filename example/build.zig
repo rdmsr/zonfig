@@ -6,7 +6,7 @@ const Config = struct {
 };
 
 fn parseConfig(b: *std.Build, file_path: []const u8) !Config {
-    const config_text = b.build_root.handle.readFileAllocOptions(b.graph.io, file_path, b.allocator, .unlimited, .@"1", 0) catch |err| {
+    const config_text = b.root.root_dir.handle.readFileAllocOptions(b.graph.io, file_path, b.allocator, .unlimited, .@"1", 0) catch |err| {
         return err;
     };
 

@@ -28,11 +28,6 @@ pub fn build(b: *std.Build) void {
         }),
     });
 
-    if (builtin.target.os.tag != .macos) {
-        exe.use_lld = true;
-        exe.use_llvm = true;
-    }
-
     b.installArtifact(exe);
 
     const run_step = b.step("run", "Run the app");
@@ -42,9 +37,7 @@ pub fn build(b: *std.Build) void {
 
     run_cmd.step.dependOn(b.getInstallStep());
 
-    if (b.args) |args| {
-        run_cmd.addArgs(args);
-    }
+    run_cmd.addPassthruArgs();
 }
 
 pub fn addConfigStep(b: *std.Build, dep: *std.Build.Dependency, schema_path: []const u8, config_path: []const u8) void {
