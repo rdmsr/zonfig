@@ -92,6 +92,7 @@ fn parseArgs(allocator: std.mem.Allocator, init: std.process.Init) !Args {
 
 pub fn main(init: std.process.Init) !void {
     const allocator = init.arena.allocator();
+    const gpa = init.gpa;
     const io = init.io;
     const dir = std.Io.Dir.cwd();
     var stderr = std.Io.File.stderr().writer(io, &.{});
@@ -112,25 +113,32 @@ pub fn main(init: std.process.Init) !void {
     };
     defer allocator.free(source);
 
-    var diag: std.zon.parse.Diagnostics = .{};
-    defer diag.deinit(allocator);
+    var diag: std.zon.parse.Diagnostics = undefined;
 
     var report: zonfig.Schema.ValidateReport = .{};
-    defer report.deinit(allocator);
+    defer report.deinit(gpa);
 
-    const schema = zonfig.Schema.parseAndValidate(allocator, init.io, source, &diag, &report) catch |err| {
+    const schema = zonfig.Schema.parseAndValidate(gpa, allocator, init.io, source, &diag, &report) catch |err| {
         switch (err) {
             error.ValidationFailed => try printValidationReport(errw, report),
+            error.ParseZon => try errw.print("{f}\n", .{diag.fmt(args.schema_path)}),
             else => {
                 try errw.print("parse failed: {any}\n", .{err});
-                try errw.print("{f}\n", .{diag});
             },
         }
         std.process.exit(1);
     };
 
-    var out = std.Io.Writer.Allocating.init(allocator);
-    defer out.deinit();
+    var engine = zonfig.Engine.init(allocator, schema, .{
+        .format = switch (args.format) {
+            .Zon => zonfig.formats.Zon,
+            .Json => zonfig.formats.Json,
+        },
+    }) catch |err| {
+        try errw.print("error: engine init failed: {any}\n", .{err});
+        return err;
+    };
+    defer engine.deinit();
 
     var config_file = try dir.createFile(init.io, args.config_path, .{ .truncate = false, .read = true });
     defer config_file.close(init.io);
@@ -140,16 +148,6 @@ pub fn main(init: std.process.Init) !void {
     defer allocator.free(curr_cfg);
     var config_reader = config_file.reader(init.io, curr_cfg);
     try config_reader.interface.fill(file_size);
-
-    var engine = zonfig.Engine.init(allocator, schema, .{
-        .format = switch (args.format) {
-            .Zon => zonfig.formats.Zon,
-            .Json => zonfig.formats.Json,
-        },
-    }) catch |err| {
-        try errw.print("error: engine init failed: {any}\n", .{err});
-        std.process.exit(1);
-    };
 
     if (curr_cfg.len > 0) {
         try engine.load(curr_cfg);
@@ -165,8 +163,6 @@ pub fn main(init: std.process.Init) !void {
     }
 
     engine.setSaveFile(init.io, &config_file);
-
-    defer engine.deinit();
 
     try app.run(init, &engine);
 }

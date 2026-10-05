@@ -85,7 +85,7 @@ pub const Engine = struct {
         }
         self.dag.deinit();
         self.state.deinit();
-        self.schema.deinit(self.allocator);
+        self.schema.deinit();
     }
 
     /// Check if a key is active by recursively evaluating its condition,

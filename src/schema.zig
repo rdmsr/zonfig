@@ -102,6 +102,10 @@ pub const ValidateReport = struct {
     issues: std.ArrayListUnmanaged(ValidateIssue) = .empty,
 
     pub fn deinit(self: *ValidateReport, allocator: std.mem.Allocator) void {
+        for (self.issues.items) |iss| {
+            if (iss.key) |key| allocator.free(key);
+            if (iss.other) |other| allocator.free(other);
+        }
         self.issues.deinit(allocator);
     }
 
@@ -115,23 +119,24 @@ pub const ValidateReport = struct {
 };
 
 /// Parse a schema from a ZON source string, returning an error on failure.
-/// `diagnostic` is populated on failure, and should be deallocated by the caller.
+/// Parsed data and diagnostics belong to `arena`, which must outlive the schema.
+/// `diagnostic` is populated on error.ParseZon.
 pub fn parse(
-    allocator: std.mem.Allocator,
+    gpa: std.mem.Allocator,
+    arena: std.mem.Allocator,
     source: [:0]const u8,
     diagnostic: *std.zon.parse.Diagnostics,
 ) !Self {
-    const parsed = try std.zon.parse.fromSliceAlloc(
-        struct { title: ?[]const u8, entries: []Entry },
-        allocator,
-        source,
-        diagnostic,
-        .{ .free_on_error = true },
-    );
+    const parsed = try std.zon.parse.fromSlice(struct { title: ?[]const u8, entries: []Entry }, .{
+        .gpa = gpa,
+        .arena = arena,
+        .source = source,
+        .diagnostics = diagnostic,
+    });
     return .{
         .title = parsed.title,
         .entries = parsed.entries,
-        .entries_by_key = .init(allocator),
+        .entries_by_key = .init(gpa),
     };
 }
 
@@ -153,94 +158,73 @@ pub fn validate(
 
 pub fn resolve(
     self: *Self,
-    allocator: std.mem.Allocator,
+    gpa: std.mem.Allocator,
+    arena: std.mem.Allocator,
     io: std.Io,
     base_dir: std.Io.Dir,
     diagnostic: *std.zon.parse.Diagnostics,
 ) !void {
-    self.entries = try resolveEntries(allocator, io, self.entries, base_dir, diagnostic);
+    self.entries = try resolveEntries(gpa, arena, io, self.entries, base_dir, diagnostic);
 }
 
 /// Convenience method to parse and validate.
-/// Caller owns returned schema and report memory.
+/// Caller must deinit the schema and report, then release the arena.
 pub fn parseAndValidate(
-    allocator: std.mem.Allocator,
+    gpa: std.mem.Allocator,
+    arena: std.mem.Allocator,
     io: std.Io,
     source: [:0]const u8,
     diagnostic: *std.zon.parse.Diagnostics,
     report: *ValidateReport,
 ) !Self {
-    var parsed = try parse(allocator, source, diagnostic);
-    errdefer parsed.deinit(allocator);
-    try parsed.resolve(allocator, io, std.Io.Dir.cwd(), diagnostic);
-    try parsed.validate(allocator, report);
+    var parsed = try parse(gpa, arena, source, diagnostic);
+    errdefer parsed.deinit();
+    try parsed.resolve(gpa, arena, io, std.Io.Dir.cwd(), diagnostic);
+    try parsed.validate(gpa, report);
     return parsed;
 }
 
-pub fn deinit(self: *Self, allocator: std.mem.Allocator) void {
-    if (self.title) |t| allocator.free(t);
-    deinitEntries(allocator, self.entries);
-    allocator.free(self.entries);
+/// Release the lookup table. Parsed data is released with the caller's arena.
+pub fn deinit(self: *Self) void {
+    self.entries_by_key.deinit();
     self.* = undefined;
 }
 
 fn resolveEntries(
-    allocator: std.mem.Allocator,
+    gpa: std.mem.Allocator,
+    arena: std.mem.Allocator,
     io: std.Io,
     entries: []Entry,
     base_dir: std.Io.Dir,
     diagnostic: *std.zon.parse.Diagnostics,
 ) ![]Entry {
     var out: std.ArrayListUnmanaged(Entry) = .empty;
-    errdefer out.deinit(allocator);
+    defer out.deinit(gpa);
 
     for (entries) |e| {
         if (e.kind == .import) {
             const path = e.path orelse return error.ImportMissingPath;
-            const source = try base_dir.readFileAllocOptions(io, path, allocator, .unlimited, .@"1", 0);
-            defer allocator.free(source);
+            const source = try base_dir.readFileAllocOptions(io, path, gpa, .unlimited, .@"1", 0);
+            defer gpa.free(source);
 
-            // FIXME: handle diagnostics from imported files
-            var imported = try std.zon.parse.fromSliceAlloc([]Entry, allocator, source, null, .{});
-            imported = try resolveEntries(allocator, io, imported, base_dir, diagnostic);
-            try out.appendSlice(allocator, imported);
-            allocator.free(imported);
+            var imported = try std.zon.parse.fromSlice([]Entry, .{
+                .gpa = gpa,
+                .arena = arena,
+                .source = source,
+                .diagnostics = diagnostic,
+            });
+            imported = try resolveEntries(gpa, arena, io, imported, base_dir, diagnostic);
+            try out.appendSlice(gpa, imported);
         } else {
             var entry = e;
             if (e.entries) |sub| {
-                entry.entries = try resolveEntries(allocator, io, sub, base_dir, diagnostic);
+                entry.entries = try resolveEntries(gpa, arena, io, sub, base_dir, diagnostic);
             }
-            try out.append(allocator, entry);
+            try out.append(gpa, entry);
         }
     }
 
-    return try out.toOwnedSlice(allocator);
-}
-
-fn deinitEntries(allocator: std.mem.Allocator, entries: []Entry) void {
-    for (entries) |*e| {
-        if (e.key) |k| allocator.free(k);
-        allocator.free(e.label);
-        if (e.help) |h| allocator.free(h);
-
-        if (e.default) |d| {
-            switch (d) {
-                .string => |s| allocator.free(s),
-                .choice => |s| allocator.free(s),
-                else => {},
-            }
-        }
-
-        if (e.options) |opts| {
-            for (opts) |opt| allocator.free(opt.value);
-            allocator.free(opts);
-        }
-
-        if (e.entries) |sub| {
-            deinitEntries(allocator, sub);
-            allocator.free(sub);
-        }
-    }
+    return try arena.dupe(Entry, out.items);
 }
 
 fn issue(
@@ -251,10 +235,14 @@ fn issue(
     other: ?[]const u8,
     msg: []const u8,
 ) !void {
+    const owned_key = try allocator.dupe(u8, key orelse "");
+    errdefer allocator.free(owned_key);
+    const owned_other = try allocator.dupe(u8, other orelse "");
+    errdefer allocator.free(owned_other);
     try report.add(allocator, .{
         .code = code,
-        .key = try allocator.dupe(u8, key orelse ""),
-        .other = try allocator.dupe(u8, other orelse ""),
+        .key = owned_key,
+        .other = owned_other,
         .msg = msg,
     });
 }

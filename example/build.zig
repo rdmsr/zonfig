@@ -10,9 +10,16 @@ fn parseConfig(b: *std.Build, file_path: []const u8) !Config {
         return err;
     };
 
-    var diag = std.zon.parse.Diagnostics{};
-    const parsed = std.zon.parse.fromSliceAlloc(Config, b.allocator, config_text, &diag, .{ .ignore_unknown_fields = true }) catch |err| {
-        std.debug.print("error: failed to parse ZON: {f}\n", .{diag});
+    var diag: std.zon.parse.Diagnostics = undefined;
+    const parsed = std.zon.parse.fromSlice(Config, .{
+        .gpa = b.allocator,
+        .arena = b.allocator,
+        .source = config_text,
+        .diagnostics = &diag,
+        .ignore_unknown_fields = true,
+    }) catch |err| {
+        if (err == error.ParseZon)
+            std.debug.print("error: failed to parse ZON: {f}\n", .{diag.fmt(file_path)});
         return err;
     };
 

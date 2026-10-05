@@ -7,7 +7,7 @@
         },
     },
     .fingerprint = 0xf0537c2ff9fc4057,
-    .minimum_zig_version = "0.17.0",
+    .minimum_zig_version = "0.18.0-dev.2+faa537cf9",
 
     .paths = .{
         "build.zig",

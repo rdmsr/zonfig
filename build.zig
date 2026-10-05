@@ -1,5 +1,4 @@
 const std = @import("std");
-const builtin = @import("builtin");
 
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
@@ -8,6 +7,7 @@ pub fn build(b: *std.Build) void {
     const mod = b.addModule("zonfig", .{
         .root_source_file = b.path("src/root.zig"),
         .target = target,
+        .optimize = optimize,
     });
 
     const zigzag = b.dependency("zigzag", .{

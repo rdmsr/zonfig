@@ -73,7 +73,7 @@ fn deserializeZon(self: *Engine, source: [:0]const u8) Error!void {
     const full = ast.fullStructInit(&buf, root) orelse return Error.InvalidFormat;
 
     for (full.ast.fields) |field_node| {
-        const val_node = @intFromEnum(field_node);
+        const val_node = @backingInt(field_node);
         const val_tag = ast.nodes.items(.tag)[val_node];
 
         // Get the key
@@ -102,7 +102,7 @@ fn deserializeZon(self: *Engine, source: [:0]const u8) Error!void {
                 if (val_tag != .string_literal) continue;
 
                 var writer: std.Io.Writer.Allocating = .init(self.allocator);
-                _ = std.zig.ZonGen.parseStrLit(ast, field_node, &writer.writer) catch continue;
+                _ = std.zig.ZonGen.parseStrLit(&ast, field_node, &writer.writer) catch continue;
 
                 break :blk if (entry.kind == .string)
                     .{ .string = writer.written() }
