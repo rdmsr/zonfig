@@ -99,7 +99,7 @@ pub const ValidateIssue = struct {
 };
 
 pub const ValidateReport = struct {
-    issues: std.ArrayListUnmanaged(ValidateIssue) = .empty,
+    issues: std.ArrayList(ValidateIssue) = .empty,
 
     pub fn deinit(self: *ValidateReport, allocator: std.mem.Allocator) void {
         for (self.issues.items) |iss| {
@@ -198,7 +198,7 @@ fn resolveEntries(
     base_dir: std.Io.Dir,
     diagnostic: *std.zon.parse.Diagnostics,
 ) ![]Entry {
-    var out: std.ArrayListUnmanaged(Entry) = .empty;
+    var out: std.ArrayList(Entry) = .empty;
     defer out.deinit(gpa);
 
     for (entries) |e| {

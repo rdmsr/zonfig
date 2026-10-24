@@ -159,7 +159,7 @@ pub const Engine = struct {
         self: *const Engine,
         allocator: std.mem.Allocator,
         entries: []const Schema.Entry,
-        out: *std.ArrayListUnmanaged(*const Schema.Entry),
+        out: *std.ArrayList(*const Schema.Entry),
     ) !void {
         for (entries) |*e| {
             if (self.isEntryVisible(e)) {
@@ -172,7 +172,7 @@ pub const Engine = struct {
         self: *const Self,
         allocator: std.mem.Allocator,
         key: []const u8,
-        out: *std.ArrayListUnmanaged(*const Schema.Option),
+        out: *std.ArrayList(*const Schema.Option),
     ) !void {
         const entry = self.getEntry(key) orelse return;
         const opts = entry.options orelse return;

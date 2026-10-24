@@ -145,13 +145,13 @@ const Model = struct {
     gpa: std.mem.Allocator,
 
     root_entry: Schema.Entry,
-    stack: std.ArrayListUnmanaged(*const Schema.Entry),
-    entries: std.ArrayListUnmanaged(*const Schema.Entry),
-    item_strings: std.ArrayListUnmanaged([]u8),
+    stack: std.ArrayList(*const Schema.Entry),
+    entries: std.ArrayList(*const Schema.Entry),
+    item_strings: std.ArrayList([]u8),
     list: EntryList,
     text_input: zz.TextInput,
     choice_list: ChoiceList,
-    active_opts: std.ArrayListUnmanaged(*const Schema.Option),
+    active_opts: std.ArrayList(*const Schema.Option),
     mode: Mode,
     status: ?Status,
 
@@ -425,7 +425,7 @@ const Model = struct {
         ) catch Theme.render(alloc, Theme.titleStyle(), title_raw);
 
         // Breadcrumb, each menu is separated by " > ".
-        var labels: std.ArrayListUnmanaged([]const u8) = .empty;
+        var labels: std.ArrayList([]const u8) = .empty;
         defer labels.deinit(alloc);
         for (self.stack.items) |e| labels.append(alloc, e.label) catch break;
         const breadcrumb = Theme.render(

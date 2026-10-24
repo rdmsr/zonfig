@@ -8,8 +8,8 @@ pub const Error = error{
 };
 
 const Node = struct {
-    dependents: std.ArrayListUnmanaged([]const u8) = .empty,
-    depends_on: std.ArrayListUnmanaged([]const u8) = .empty,
+    dependents: std.ArrayList([]const u8) = .empty,
+    depends_on: std.ArrayList([]const u8) = .empty,
 };
 
 /// A directed acyclic graph (DAG) to represent dependencies between configuration entries.
