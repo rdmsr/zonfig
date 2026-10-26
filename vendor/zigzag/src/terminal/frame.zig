@@ -296,7 +296,7 @@ fn leavesStyleOpen(line: []const u8) bool {
                 const payload = line[payload_start..end];
                 if (std.mem.startsWith(u8, payload, "8;")) {
                     const uri_start = (std.mem.indexOfScalarPos(u8, payload, 2, ';') orelse
-                        payload.len -| 1) + 1;
+                        (payload.len -| 1)) + 1;
                     link_open = uri_start < payload.len;
                 }
 
