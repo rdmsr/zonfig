@@ -5,7 +5,7 @@ const std = @import("std");
 const Writer = std.Io.Writer;
 
 /// Modifier keys that can be combined with other keys
-pub const Modifiers = packed struct {
+pub const Modifiers = bitpack struct {
     shift: bool = false,
     alt: bool = false,
     ctrl: bool = false,

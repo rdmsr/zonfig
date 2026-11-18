@@ -630,7 +630,7 @@ pub const Terminal = struct {
         var params_buf: [256]u8 = undefined;
         var params_writer = FixedWriter(&params_buf);
 
-        try params_writer.print("a=T,t=d,f={d}", .{@intFromEnum(options.format)});
+        try params_writer.print("a=T,t=d,f={d}", .{@backingInt(options.format)});
         if (options.quiet) try params_writer.writeAll(",q=2");
         if (options.width_cells) |cols| try params_writer.print(",c={d}", .{cols});
         if (options.height_cells) |rows| try params_writer.print(",r={d}", .{rows});

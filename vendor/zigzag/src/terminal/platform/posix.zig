@@ -100,8 +100,8 @@ pub fn enableRawMode(state: *State) !void {
     raw.lflag.ISIG = false;
 
     // Control characters: set read timeout
-    raw.cc[@intFromEnum(posix.V.MIN)] = 0;
-    raw.cc[@intFromEnum(posix.V.TIME)] = 1; // 0.1 seconds
+    raw.cc[@backingInt(posix.V.MIN)] = 0;
+    raw.cc[@backingInt(posix.V.TIME)] = 1; // 0.1 seconds
 
     posix.tcsetattr(state.stdin_fd, .FLUSH, raw) catch {
         return TerminalError.SetAttrFailed;

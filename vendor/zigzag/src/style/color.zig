@@ -156,12 +156,12 @@ pub const AnsiColor = enum(u8) {
     bright_white = 15,
 
     pub fn fgCode(self: AnsiColor) u8 {
-        const base: u8 = @intFromEnum(self);
+        const base: u8 = @backingInt(self);
         return if (base < 8) 30 + base else 90 + base - 8;
     }
 
     pub fn bgCode(self: AnsiColor) u8 {
-        const base: u8 = @intFromEnum(self);
+        const base: u8 = @backingInt(self);
         return if (base < 8) 40 + base else 100 + base - 8;
     }
 
@@ -191,7 +191,7 @@ pub const AnsiColor = enum(u8) {
 fn ansi256ToRgb(n: u8) Color.RGB {
     if (n < 16) {
         // Standard colors
-        return @as(AnsiColor, @enumFromInt(n)).toRgb();
+        return @as(AnsiColor, @fromBackingInt(@intCast(n))).toRgb();
     } else if (n < 232) {
         // 6x6x6 color cube
         const idx = n - 16;

@@ -296,7 +296,7 @@ pub const RichLog = struct {
         }
 
         if (self.show_level) {
-            const lvl_style = self.level_styles[@intFromEnum(entry.level)];
+            const lvl_style = self.level_styles[@backingInt(entry.level)];
             const styled = try lvl_style.render(allocator, entry.level.label());
             defer allocator.free(styled);
             try w.writeAll(styled);

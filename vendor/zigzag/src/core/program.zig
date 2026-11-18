@@ -636,7 +636,7 @@ pub fn Program(comptime Model: type) type {
                             .file => |path| {
                                 _ = try term.transmitKittyImageFromFile(path, .{
                                     .image_id = cache.image_id,
-                                    .format = @enumFromInt(@intFromEnum(cache.format)),
+                                    .format = @fromBackingInt(@intCast(@backingInt(cache.format))),
                                     .quiet = cache.quiet,
                                     .pixel_width = cache.pixel_width,
                                     .pixel_height = cache.pixel_height,
@@ -645,7 +645,7 @@ pub fn Program(comptime Model: type) type {
                             .data => |data| {
                                 _ = try term.transmitKittyImage(data, .{
                                     .image_id = cache.image_id,
-                                    .format = @enumFromInt(@intFromEnum(cache.format)),
+                                    .format = @fromBackingInt(@intCast(@backingInt(cache.format))),
                                     .quiet = cache.quiet,
                                     .pixel_width = cache.pixel_width,
                                     .pixel_height = cache.pixel_height,
@@ -735,7 +735,7 @@ pub fn Program(comptime Model: type) type {
                             .sixel => .sixel,
                         };
                         _ = try term.drawImageDataWithProtocol(image.data, .{
-                            .format = @enumFromInt(@intFromEnum(image.format)),
+                            .format = @fromBackingInt(@intCast(@backingInt(image.format))),
                             .pixel_width = image.pixel_width,
                             .pixel_height = image.pixel_height,
                             .width_cells = image.width_cells,

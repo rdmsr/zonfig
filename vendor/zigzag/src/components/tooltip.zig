@@ -596,8 +596,8 @@ const CellColor = union(enum) {
     rgb: [3]u8,
 
     fn eql(a: CellColor, b: CellColor) bool {
-        const tag_a = @intFromEnum(std.meta.activeTag(a));
-        const tag_b = @intFromEnum(std.meta.activeTag(b));
+        const tag_a = @backingInt(std.meta.activeTag(a));
+        const tag_b = @backingInt(std.meta.activeTag(b));
         if (tag_a != tag_b) return false;
         return switch (a) {
             .none => true,
@@ -833,12 +833,12 @@ fn applySgr(style: *CellStyle, params: []const u8) void {
             29 => style.strikethrough = false,
             // Foreground basic colors
             30...37 => {
-                style.fg = .{ .ansi = @enumFromInt(n - 30) };
+                style.fg = .{ .ansi = @fromBackingInt(@intCast(n - 30)) };
             },
             39 => style.fg = .none,
             // Background basic colors
             40...47 => {
-                style.bg = .{ .ansi = @enumFromInt(n - 40) };
+                style.bg = .{ .ansi = @fromBackingInt(@intCast(n - 40)) };
             },
             49 => style.bg = .none,
             // Extended foreground
@@ -873,11 +873,11 @@ fn applySgr(style: *CellStyle, params: []const u8) void {
             },
             // Bright foreground
             90...97 => {
-                style.fg = .{ .ansi = @enumFromInt(n - 90 + 8) };
+                style.fg = .{ .ansi = @fromBackingInt(@intCast(n - 90 + 8)) };
             },
             // Bright background
             100...107 => {
-                style.bg = .{ .ansi = @enumFromInt(n - 100 + 8) };
+                style.bg = .{ .ansi = @fromBackingInt(@intCast(n - 100 + 8)) };
             },
             else => {},
         }

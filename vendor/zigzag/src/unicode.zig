@@ -12,14 +12,14 @@ pub const WidthStrategy = enum(u8) {
     unicode,
 };
 
-var width_strategy: std.atomic.Value(u8) = std.atomic.Value(u8).init(@intFromEnum(WidthStrategy.legacy_wcwidth));
+var width_strategy: std.atomic.Value(u8) = std.atomic.Value(u8).init(@backingInt(WidthStrategy.legacy_wcwidth));
 
 pub fn setWidthStrategy(strategy: WidthStrategy) void {
-    width_strategy.store(@intFromEnum(strategy), .release);
+    width_strategy.store(@backingInt(strategy), .release);
 }
 
 pub fn getWidthStrategy() WidthStrategy {
-    return @enumFromInt(width_strategy.load(.acquire));
+    return @fromBackingInt(@intCast(width_strategy.load(.acquire)));
 }
 
 pub fn charWidth(codepoint: u21) usize {
